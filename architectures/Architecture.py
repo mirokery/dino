@@ -3,26 +3,56 @@ from torchvision.models import resnet50
 import torch
 import torch.nn.functional as F
 
+# class MyArchitecture(nn.Module):
+#   def __init__(self, num_classes):
+#     super(MyArchitecture, self).__init__()
+#     self.model = resnet50()
+#     self.drop1 = nn.Dropout(p=0.25)
+#     self.lin1 = nn.Linear(in_features=1000, out_features=256)
+#     self.drop2 = nn.Dropout(p=0.5)
+#     self.lin2 = nn.Linear(in_features=256, out_features=num_classes)
+#     self.relu = nn.ReLU()
+#
+#   def forward(self, x):
+#     x = self.model(x)
+#     x = self.drop1(x)
+#     x = x.reshape(x.shape[0], -1)
+#     x = self.relu(self.lin1(x))
+#     x = self.drop2(x)
+#     x = self.lin2(x)
+#     return x
 class MyArchitecture(nn.Module):
   def __init__(self, num_classes):
     super(MyArchitecture, self).__init__()
-    self.model = resnet50()
-    self.drop1 = nn.Dropout(p=0.25)
-    self.lin1 = nn.Linear(in_features=1000, out_features=256)
-    self.drop2 = nn.Dropout(p=0.5)
-    self.lin2 = nn.Linear(in_features=256, out_features=num_classes)
-    self.relu = nn.ReLU()
+    self.cb1 = conv_block(3, 64, kernel_size=3, stride=2)
+    self.cb2 = conv_block(64, 128, kernel_size=3, stride=2)
+    self.cb3 = conv_block(128, 128, kernel_size=3, stride=2)
+    self.cb4 = conv_block(128, 256, kernel_size=3, stride=2)
+    self.cb5 = conv_block(256, 256, kernel_size=3, stride=2)
+    self.cb6 = conv_block(256, 512, kernel_size=3, stride=2)
+    self.lin1 = nn.Linear(12800, 5)
 
   def forward(self, x):
-    x = self.model(x)
-    x = self.drop1(x)
+    x = self.cb1(x)
+    x = self.cb2(x)
+    x = self.cb3(x)
+    x = self.cb4(x)
+    x = self.cb5(x)
+    x = self.cb6(x)
     x = x.reshape(x.shape[0], -1)
-    x = self.relu(self.lin1(x))
-    x = self.drop2(x)
-    x = self.lin2(x)
+    x = self.lin1(x)
     return x
 
 
+class conv_block(nn.Module):
+  def __init__(self, in_channels, out_channels, **kwargs):
+    super(conv_block, self).__init__()
+    self.relu = nn.ReLU()
+    self.conv = nn.Conv2d(in_channels, out_channels, **kwargs)
+    self.batchnorm = nn.BatchNorm2d(out_channels)
+
+  def forward(self, x):
+    return self.relu(self.batchnorm(self.conv(x)))
 
 
 

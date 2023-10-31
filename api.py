@@ -16,7 +16,7 @@ import torch.optim as optim
 app = FastAPI()
 
 model_classify = MyArchitecture(5)
-model_classify.load_state_dict(torch.load(r"model/classification_resnet50_pretrained.pth", map_location=torch.device('cpu')))
+model_classify.load_state_dict(torch.load(r"model/classification.pth", map_location=torch.device('cpu')))
 model_YOLO_detection = YOLO(r"model/YOLOv8detection.pt")
 model_YOLO_segmentation = YOLO(r"model/YOLOv8segmentation.pt")
 model_generator = torch.load('model/generator_all.pth', map_location="cpu")
@@ -31,7 +31,7 @@ def classify_image(image_bytes):
 
     input_tensor = transform_classify(image)
     input_batch = input_tensor.unsqueeze(0)
-    class_to_idx = {'spino': 0, 'stego': 1, 'trex': 2, 'para': 3, 'velo': 4}
+    class_to_idx = {'trex': 0, 'para': 1, 'stego': 2, 'velo': 3, 'spino': 4}
 
     with torch.no_grad():
         output = model_classify(input_batch)
