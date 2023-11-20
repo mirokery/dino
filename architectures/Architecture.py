@@ -3,24 +3,7 @@ from torchvision.models import resnet50
 import torch
 import torch.nn.functional as F
 
-# class MyArchitecture(nn.Module):
-#   def __init__(self, num_classes):
-#     super(MyArchitecture, self).__init__()
-#     self.model = resnet50()
-#     self.drop1 = nn.Dropout(p=0.25)
-#     self.lin1 = nn.Linear(in_features=1000, out_features=256)
-#     self.drop2 = nn.Dropout(p=0.5)
-#     self.lin2 = nn.Linear(in_features=256, out_features=num_classes)
-#     self.relu = nn.ReLU()
-#
-#   def forward(self, x):
-#     x = self.model(x)
-#     x = self.drop1(x)
-#     x = x.reshape(x.shape[0], -1)
-#     x = self.relu(self.lin1(x))
-#     x = self.drop2(x)
-#     x = self.lin2(x)
-#     return x
+
 class MyArchitecture(nn.Module):
   def __init__(self, num_classes):
     super(MyArchitecture, self).__init__()

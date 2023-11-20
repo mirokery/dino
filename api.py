@@ -19,7 +19,8 @@ model_classify = MyArchitecture(5)
 model_classify.load_state_dict(torch.load(r"model/classification.pth", map_location=torch.device('cpu')))
 model_YOLO_detection = YOLO(r"model/YOLOv8detection.pt")
 model_YOLO_segmentation = YOLO(r"model/YOLOv8segmentation.pt")
-model_generator = torch.load('model/generator_all.pth', map_location="cpu")
+model_generator_all = torch.load('model/generator_all.pth', map_location="cpu")
+model_generator_stego = torch.load('model/generator_stego.pth', map_location="cpu")
 def classify_image(image_bytes):
 
     image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
@@ -56,14 +57,11 @@ def segmentation_image(image_bytes):
     H, W, _ = img.shape
     img = cv2.resize(img, (384, 640))
     results = model_YOLO_segmentation(img)
-    for result in results:
-        for mask in result.masks:
-            m = np.squeeze(mask.data)
-            composite = torch.stack((m, m, m), 2)
-            tmp = img * composite.numpy().astype(np.uint8)
-            tmp = cv2.resize(tmp, (W, H))
+    result = results[0]
+    masks = result.masks
+    polygon = masks.xy[0]
 
-    return tmp
+    return img,polygon
 
 def generate_examples(gen, steps, truncation=0.7, n=10):
     gen.eval()
@@ -76,8 +74,8 @@ def generate_examples(gen, steps, truncation=0.7, n=10):
 
 
 
-@app.post("/classify/", description="This endpoint takes as input image a return image with predicted class")
-async def  classify_endpoint(image: UploadFile = File(...)):
+@app.post("/classify_all/", description="This endpoint takes as input image a return image with predicted class")
+async def classify_all_endpoint(image: UploadFile = File(...)):
 
     image_bytes = await image.read()
     classified_image, predicted_class = classify_image(image_bytes)
@@ -94,8 +92,8 @@ async def  classify_endpoint(image: UploadFile = File(...)):
 
     return FileResponse(output_image_path, media_type="image/jpeg")
 
-@app.post("/detect/", description="This endpoint takes as input image a return image with predicted class and bounding box")
-async def detect_endpoint(image: UploadFile = File(...)):
+@app.post("/detect_all/", description="This endpoint takes as input image a return image with predicted class and bounding box")
+async def detect_all_endpoint(image: UploadFile = File(...)):
 
     image_bytes = await image.read()
     detected_image,predicted_boxes,predicted_class = detect_image(image_bytes)
@@ -114,16 +112,17 @@ async def detect_endpoint(image: UploadFile = File(...)):
     cv2.imwrite(output_image_path, img)
     return FileResponse(output_image_path, media_type="image/jpeg")
 
-@app.post("/segmentation/", description="This endpoint works just for stego class due long preparation of data. This endpoint takes as input image and returns mask as image of predicted class")
-async def segmentation_endpoint(image: UploadFile = File(...)):
+@app.post("/segmentation_stego/", description="This endpoint works just for stego class due long preparation of data. This endpoint takes as input image and returns mask as image of predicted class")
+async def segmentation_stego_endpoint(image: UploadFile = File(...)):
     image_bytes = await image.read()
-    img = segmentation_image(image_bytes)
+    img,polygon = segmentation_image(image_bytes)
     output_image_path = "segmentation_image.jpg"
+    cv2.polylines(img, np.int32([polygon]), isClosed=True, color=(255, 0, 0), thickness=5)
     cv2.imwrite(output_image_path, img)
     return FileResponse(output_image_path, media_type="image/jpeg")
 
-@app.post("/generate/",description="This endpoint is in progress! For image resolution use int in range 0-8. 0 -> 4x4 1 ->8x8 2 -> 16x16 ....")
-async def generate_endpoint(number_of_examples:int,image_resolution:int ):
+@app.post("/generate_all/",description="This endpoint is in progress! For image resolution use int in range 0-8. 0 -> 4x4 1 ->8x8 2 -> 16x16 ....")
+async def generate_all_endpoint(image_resolution:int ):
     output_image_path="generated_images.jpg"
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     LEARNING_RATE = 1e-3
@@ -135,12 +134,11 @@ async def generate_endpoint(number_of_examples:int,image_resolution:int ):
     ).to(DEVICE)
     opt_gen = optim.Adam(gen.parameters(), lr=LEARNING_RATE, betas=(0.0, 0.99))
 
-    gen.load_state_dict(model_generator["state_dict"])
-    opt_gen.load_state_dict(model_generator["optimizer"])
+    gen.load_state_dict(model_generator_all["state_dict"])
+    opt_gen.load_state_dict(model_generator_all["optimizer"])
     for param_group in opt_gen.param_groups:
         param_group["lr"] = LEARNING_RATE
-    generate_examples(gen, steps=image_resolution, truncation=0.7, n=number_of_examples)
-
+    generate_examples(gen, steps=image_resolution, truncation=0.7, n=10)
     image_list = []
     path_to_image_folder = "generated"
     for i in os.listdir(path_to_image_folder):
@@ -149,7 +147,32 @@ async def generate_endpoint(number_of_examples:int,image_resolution:int ):
     cv2.imwrite('generated_images.jpg', result)
 
     return FileResponse(output_image_path, media_type="image/jpeg")
+@app.post("/generate_stego/",description="This endpoint is in progress! For image resolution use int in range 0-8. 0 -> 4x4 1 ->8x8 2 -> 16x16 ....")
+async def generate_all_endpoint(image_resolution:int ):
+    output_image_path="generated_images.jpg"
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    LEARNING_RATE = 1e-3
+    CHANNELS_IMG = 3
+    Z_DIM = 256
+    IN_CHANNELS = 256
+    gen = Generator(
+        Z_DIM, IN_CHANNELS, img_channels=CHANNELS_IMG
+    ).to(DEVICE)
+    opt_gen = optim.Adam(gen.parameters(), lr=LEARNING_RATE, betas=(0.0, 0.99))
 
+    gen.load_state_dict(model_generator_stego["state_dict"])
+    opt_gen.load_state_dict(model_generator_stego["optimizer"])
+    for param_group in opt_gen.param_groups:
+        param_group["lr"] = LEARNING_RATE
+    generate_examples(gen, steps=image_resolution, truncation=0.7, n=10)
+    image_list = []
+    path_to_image_folder = "generated"
+    for i in os.listdir(path_to_image_folder):
+        image_list.append(cv2.imread(os.path.join(path_to_image_folder, i)))
+    result = np.vstack(image_list)
+    cv2.imwrite('generated_images.jpg', result)
+
+    return FileResponse(output_image_path, media_type="image/jpeg")
 @app.get("/")
 def root():
     return "Welcome to API for using api go to /docs"
